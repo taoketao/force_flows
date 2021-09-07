@@ -35,7 +35,7 @@ class Pane(object):
             self.color_bit=True
         self.bg_color = kwargs.get('bg_color', self.get_random_bg_color())
 
-        nbuckets = 40+1
+        nbuckets = 4+1
         self.id_line_points = np.array([ [i,i] for i in np.linspace(\
                    self.values_range[0][0], self.values_range[1][1], nbuckets  ) ])
         self.id_line_points *= self.my_screensize / self.values_range[1][0] / 3
@@ -89,8 +89,45 @@ class Pane(object):
         self.plot_points(self.exp_line_points)
         self.plot_points(self.zero_line_points)
         self.plot_points(self.exMx_line_points)
+        self.force_lines=(self.zero_line_points, self.exMx_line_points)
         self.plot_points(np.array([[0,0]]), (127,127,0),1)
         pygame.Surface.blit(self.global_screen, self.my_screen, self.pane_location)
+
+    def apply_inverse_dist_squared_force(self):  
+        cross_array=\
+               np.add(self.sample_points_exMx.T, \
+                np.reshape(self.zero_line_points.T,\
+                self.zero_line_points.shape+(1,)) \
+                )#.shape )
+        magn = np.power(np.sum(np.power(cross_array,2),axis=0),0.5)
+        print (magn)
+        avg_magn = np.mean(magn, axis=1)
+        magn = (magn.T/np.max(magn,axis=1)).T
+        print (magn)
+        print(magn.shape, avg_magn.shape, avg_magn)
+        inv_dist_sqrs = cross_array / magn
+        print(inv_dist_sqrs[:3,:3,:3] )
+        inv_dist_sqrs /= magn
+#        print(inv_dist_sqrs[:3,:3,:3] )
+        accums=np.sum(inv_dist_sqrs , axis=0)
+        print(accums[:3,:3])
+        print('---')
+        self.sample_points_exMx -= accums.T
+
+
+    def apply_unit_force(self): # subgradient-style: add all distanced-strengthed vectors then normalize
+        self.sample_points_exMx 
+        print(self.sample_points_exMx.shape, self.zero_line_points.shape )
+        cross_array=\
+               np.add(self.sample_points_exMx.T, \
+                np.reshape(self.zero_line_points.T,\
+                self.zero_line_points.shape+(1,)) \
+                )#.shape )
+        accums=np.sum(cross_array, axis=0)
+        print (accums)
+        normz_accums = accums / np.power(np.sum(np.power(accums,2),axis=0),0.5)
+        print (normz_accums)
+        self.sample_points_exMx -= normz_accums.T*20
 
     def plot_points(self, points=None, color=(0,0,255), size=0):
         # tmp:
@@ -206,4 +243,7 @@ while True:
 #    if any([e.type == pygame.KEYDOWN and pygame.K_SPACE == e.key \
 #                for e in pygame.event.get()]):
 #        event = pygame.event.wait()
+    for pane in panes:
+        pane.apply_inverse_dist_squared_force()
 time.sleep(0.5)
+pygame.quit()
