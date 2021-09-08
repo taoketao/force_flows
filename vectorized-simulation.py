@@ -33,14 +33,32 @@ class Pane(object):
                 int(global_screen.get_width() *self.pane_size_fractions[0]),
                 int(global_screen.get_height()*self.pane_size_fractions[1])])
         self.my_screen = pygame.Surface(self.my_screensize)
-        self.default_origin_fractions = (.5,.3)
+
+
+        # Todo: change these so that the user can give (l,r,u,d) bounds for plotting
+        # OR origin, zoom, relative_scale_y_fraction (which gets internally converted)
+        # and an independent range of values that locate the force and sample points.
+        self.default_origin_fractions = (.5,.3) # (.5,.5) would be at the center of pane
         self.origin_fractions = kwargs.get('origin_fractions', self.default_origin_fractions) # (.5,.2)
         self.origin_coords = np.array([int(self.my_screensize[i] * \
                 self.origin_fractions[i]) for i in [0,1]])
+
+        # Left, Right, Bottom, and Top bounds for plotting. Default: [-1, 1, 1.4, 0.6]
+        default_LRBT_bounds = [-2*self.origin_fractions[0], 2*(1-self.origin_fractions[0]),\
+                               -2*self.origin_fractions[1], 2*(1-self.origin_fractions[1])]
+        if 'LRBT_bounds' in kwargs.keys():
+            self.LRBT_bounds = kwargs['LRBT_bounds']
+        elif 'zoom' in kwargs.keys():
+            self.LRBT_bounds = [bound*kwargs['zoom'] for bound in default_LRBT_bounds]
+        else:
+            self.LRBT_bounds = default_LRBT_bounds 
+
         ''' Values_width_range: the range of values to calculate functions. 
             Matters most for, eg, e^x-x. '''
         self.values_width_range = kwargs.get('values_width_range', np.array([-5,5]))
         ''' Not checked: origin coords are halfway between values range! '''
+
+
         self.color_bit = True if 'bg_color' in kwargs else False
         self.bg_color = kwargs.get('bg_color', self.get_random_bg_color())
 
@@ -328,10 +346,39 @@ class Pane(object):
                  (self.my_screensize[0],self.my_screensize[1]-1),\
                  (self.my_screensize[0],self.my_screensize[1]),\
                  (0,1)))
-        print('-',self.my_screensize)
-        print(self.origin_coords)
-        print(self.test_sample_points)
-        print(self.test_force_points)
+#        print('-',self.my_screensize)
+#        print(self.origin_coords)
+#        print(self.test_sample_points)
+#        print(self.test_force_points)
+        bds=self.LRBT_bounds[:]
+        bds[0]*=self.my_screensize[0]
+        bds[1]*=self.my_screensize[0]
+        bds[2]*=self.my_screensize[1]
+        bds[3]*=self.my_screensize[1]
+        ops=self.origin_coords
+        pygame.draw.line(self.my_screen, (255,0,255),\
+                (bds[0],self.my_screensize[1]-ops[1]),\
+                (bds[1],self.my_screensize[1]-ops[1]) )
+        pygame.draw.line(self.my_screen, (0,255,255),\
+                (ops[0],bds[2]),\
+                (ops[0],bds[3]) )
+
+        print(points.shape)
+
+        # tag [62362]
+        for (x,y) in points:#+self.origin_coords:
+            print('points',points)
+            print('origin coords',self.origin_coords)
+            print('added',points+self.origin_coords)
+            print('bounds', self.LRBT_bounds, bds)
+            print('my_screensize', self.my_screensize)
+            x = (x-self.origin_coords[0])*self.my_screensize[0]/2.1+self.origin_coords[0]
+            y = (y-self.origin_coords[1])*self.my_screensize[1]/2.1+self.origin_coords[1]
+            y=self.my_screensize[1]-y 
+            pygame.draw.polygon(self.my_screen, (255,127,0), \
+                ((x-size,y-size),(x-size,y+size),(x+size,y+size),(x+size,y-size)))
+        return
+
         for (x,y) in [tuple(points[:,i]) for i in range(points.shape[1])]:#+self.origin_coords:
             print(' ',points,self.origin_coords,points+self.origin_coords)
             x = (x-self.origin_coords[0])*self.my_screensize[0]/2.1+self.origin_coords[0]
@@ -402,6 +449,8 @@ panes = [Pane(screen, bg_color=(255,255,224))]
 SCREENSIZE = (120*6, 120*3) # 120 is nice and divisible'''
 panes=[Pane(screen, pane_coords_fractions=(0,0), pane_size_fractions=(0.5,1), values_width_range=[-8,8]),\
        Pane(screen, pane_coords_fractions=(0.5,0), pane_size_fractions=(0.5,1), values_width_range=[-1,1])]
+panes=[Pane(screen, pane_coords_fractions=(0,0), pane_size_fractions=(0.5,1), values_width_range=[-8,8], LRTB_bounds=[-9,9,-9,9]),\
+       Pane(screen, pane_coords_fractions=(0.5,0), pane_size_fractions=(0.5,1), values_width_range=[-1,1], LRTB_bounds=[-1,1,-1,1])]
 #panes = [Pane(screen, pane_coords_fractions=(i/3., j/3.),\
 #                       pane_size_fractions=(1/.3, 1/.3)) \
 #        for i in range(3) for j in range(3)]
@@ -462,6 +511,7 @@ while True:
 #        pane.apply_unit_force()
 #        pane.apply_inverse_dist_squared_force__second_try()
         pane.apply_inverse_dist_squared_force__third_try()
+    if input():break
 time.sleep(0.5)
 pygame.quit()
 #        import sys; _=input(); sys.exit()
