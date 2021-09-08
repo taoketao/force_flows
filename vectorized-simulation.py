@@ -13,13 +13,9 @@ DEBUG_POINTS_ARITHMETIC = False # flag
 
 class Pane(object):
     def __init__(self, global_screen, **kwargs):
-#        self.pane_coords_fraction = kwargs.get('pane_coords_x',0), \
-#                                    kwargs.get('pane_coords_y',0)
         self.pane_coords_fractions = kwargs.get('pane_coords_fractions', (0,0))
-        self.pane_location = tuple([int(SCREENSIZE[i]*self.pane_coords_fractions[i]) for i in [0,1]])
-#        self.pane_fraction_x, self.pane_fraction_y = \
-#                kwargs.get('pane_fraction_x', 1), \
-#                kwargs.get('pane_fraction_y', 1);
+        self.pane_location = tuple([int(self.pane_coords_fractions[i]*\
+                SCREENSIZE[i]) for i in [0,1]])
         self.pane_size_fractions = kwargs.get('pane_size_fractions', (1,1))
         self.global_screen = global_screen
         self.my_screensize = np.array([\
@@ -35,45 +31,53 @@ class Pane(object):
             self.color_bit=True
         self.bg_color = kwargs.get('bg_color', self.get_random_bg_color())
 
-        nbuckets = 4+1
-        self.id_line_points = np.array([ [i,i] for i in np.linspace(\
-                   self.values_range[0][0], self.values_range[1][1], nbuckets  ) ])
-        self.id_line_points *= self.my_screensize / self.values_range[1][0] / 3
-        self.id_line_points = self.id_line_points.astype(int)
+        self.nbuckets = 4+1
+        self.nsamples = self.nbuckets *500
 
-        self.exp_line_points = np.array([ [i,np.exp(i)] for i in np.linspace(\
-                    self.values_range[0][0]+2, self.values_range[1][1]-2, nbuckets*3  ) ])
-        self.exp_line_points *= self.my_screensize / np.log(self.values_range[1][0] )/ 3
-        self.exp_line_points = self.exp_line_points.astype(int)
+        self.create_id_line_points()
+
 
         self.zero_line_points = np.array([ [i,0] for i in np.linspace(\
-                   self.values_range[0][0], self.values_range[1][1], nbuckets  ) ])
+                   self.values_range[0][0], self.values_range[1][1], self.nbuckets  ) ])
         self.zero_line_points *= self.my_screensize / self.values_range[1][0] / 2
         self.zero_line_points = self.zero_line_points.astype(int)
                 
         self.exMx_line_points = np.array([ [i,np.exp(i)-i] for i in np.linspace(\
-                   self.values_range[0][0], self.values_range[1][1], nbuckets*3  ) ])
+                   self.values_range[0][0], self.values_range[1][1], self.nbuckets*3  ) ])
         self.exMx_line_points *= self.my_screensize / np.log(self.values_range[1][0]) / 3
         self.exMx_line_points = self.exMx_line_points.astype(int)
 
-        nsamples = nbuckets *500
         self.sample_points_exMx = np.random.uniform(\
-                   -5, 5, (nsamples,2))
+                   -5, 5, (self.nsamples,2))
         self.sample_points_exMx = self.sample_points_exMx[np.where(\
                 self.sample_points_exMx[:,1]>0)]
         def exMx(q): return np.exp(q)-q
         self.sample_points_exMx = self.sample_points_exMx[np.where(\
                 self.sample_points_exMx[:,1]<exMx(self.sample_points_exMx[:,0]))]
-#        print(self.sample_points_exMx)
-#        print(np.where(\
-#                self.sample_points_exMx[:,1]>0))
-#        print( self.sample_points_exMx[np.where(\
-#                self.sample_points_exMx[:,1]>0)])
-#        print('')
-#        self.sample_points_exMx = self.sample_points_exMx[np.where(\
-#                self.sample_points_exMx[1]<exMx(self.sample_points_exMx[0]))]
         self.sample_points_exMx *= self.my_screensize / np.log(self.values_range[1][0]) / 3
         self.sample_points_exMx  = self.sample_points_exMx  .astype(int)
+
+    def create_points(self, func, scale, howmany, buffer_=0):
+        points = np.array([ [i,func(i)] for i in np.linspace(\
+                   self.values_range[0][0]-buffer_, self.values_range[1][1]+buffer_, howmany ) ])
+        # todo: vectorise ^^
+        x_vals = np.linspace(self.values_range[0][0]-buffer_, self.values_range[1][1]+buffer_, howmany )
+        points = np.stack([x_vals,func(x_vals)])
+        print (points, self.my_screensize, scale)
+        points = (points.T * self.my_screensize / scale).T
+        print (points)
+        input()
+        return points#.astype(int)
+
+    def create_id_line_points(self):
+        self.id_line_points = self.create_points( lambda x:x, self.values_range[1][0]*3., self.nbuckets)
+
+    def create_exp_line_points(self):
+        self.exp_line_points = self.create_points( lambda x:np.exp(x), np.log(self.values_range[1][0]*3.), self.nbuckets, buffer_=-2)
+        self.exp_line_points = np.array([ [i,np.exp(i)] for i in np.linspace(\
+                    self.values_range[0][0]+2, self.values_range[1][1]-2, self.nbuckets*3  ) ])
+        self.exp_line_points *= self.my_screensize / np.log(self.values_range[1][0] )/ 3
+        self.exp_line_points = self.exp_line_points.astype(int)
 
 
     def get_random_bg_color(self):
@@ -84,10 +88,10 @@ class Pane(object):
     def draw_me(self):
         self.my_screen.fill(self.bg_color)
         if not self.color_bit:self.bg_color = self.get_random_bg_color() 
-        self.plot_points(self.sample_points_exMx, (255,0,0))
-#        self.plot_points(self.id_line_points)
+        self.plot_points(self.sample_points_exMx, (255,0,0), size=0.5)
+        self.plot_points(self.id_line_points)
         self.plot_points(self.exp_line_points)
-        self.plot_points(self.zero_line_points)
+        self.plot_points(self.zero_line_points, size=1)
         self.plot_points(self.exMx_line_points)
         self.force_lines=(self.zero_line_points, self.exMx_line_points)
         self.plot_points(np.array([[0,0]]), (127,127,0),1)
@@ -112,7 +116,7 @@ class Pane(object):
         accums=np.sum(inv_dist_sqrs , axis=0)
         print(accums[:3,:3])
         print('---')
-        self.sample_points_exMx -= accums.T
+#        self.sample_points_exMx -= accums.T
 
 
     def apply_unit_force(self): # subgradient-style: add all distanced-strengthed vectors then normalize
@@ -129,9 +133,9 @@ class Pane(object):
         print (normz_accums)
         self.sample_points_exMx -= normz_accums.T*20
 
-    def plot_points(self, points=None, color=(0,0,255), size=0):
+    def plot_points(self, points=[], color=(0,0,255), size=0):
         # tmp:
-        if points==None:
+        if len(points)==0:
             points = np.array([ [2,-3], [5,4] ])
             points = np.array([ [-6,-6], [2,-3], [5,4] ])
             points = np.array([ [0,0], [0,4], [3,4] ])
