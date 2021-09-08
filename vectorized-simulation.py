@@ -1,7 +1,14 @@
-
-
 # A vectorized adaptation of my-simulation.py that uses numpy
 # vector operations for simulation speed efficiency.
+
+'''
+itinerary:
+- Make debugging line drawings
+- Change plot rendering to take LRUD <>^v to plot points.
+  Convert the system so that all the math done on the actual domain
+  is then rendered to the pane in one stroke.
+'''
+
 
 import numpy as np
 import random
@@ -80,6 +87,13 @@ class Pane(object):
         self.simple_zero_line = np.stack([ np.linspace(*self.values_width_range,5), np.zeros((5,))]).T
         self.simple_zero_line = np.stack([ np.linspace(*[i for i in [-100,100]],5), np.zeros((5,))]).T
 
+
+        self.test_sample_points = np.array([[ 1,1 ],[.3,2 ],[.7,.7],[-1.2,.2]])
+        self.test_force_points = np.array([[1,0],[-1,0]])
+        print(self.test_sample_points)
+
+
+
     def create_sample_points_exMx(self):
         num_samples = int(self.nsamples *2  ) # empirical - this get approx self.nsamples-many ones within exMx bounds
         self.sample_points_exMx = np.random.uniform(\
@@ -153,6 +167,12 @@ class Pane(object):
     '''                                                               '''
     ''' ------------------------------------------------------------  '''
 
+
+    ''' stopping small values from blasting off is very unnecessary. '''
+    def apply_inverse_dist_squared_force__third_try(self):  
+        self.simple_sample_points *= self.values_width_range[1] * 3 / self.my_screensize 
+        self.test_sample_points
+        self.test_force_points 
 
 
     def apply_inverse_dist_squared_force__second_try(self):  
@@ -289,16 +309,43 @@ class Pane(object):
         if not self.color_bit:
             self.color_bit=True
             self.bg_color = self.get_random_bg_color() 
-        self.plot_points(self.sample_points_exMx, color=(255,0,0), size=0.5)
+#        self.plot_points(self.sample_points_exMx, color=(255,0,0), size=0.5)
 #        self.plot_points(self.id_line_points,     color=(0,0,0), size=.5)
 #        self.plot_points(self.exp_line_points,    color=(0,0,0), size=.5)
 #        self.plot_points(self.zero_line_points, size=2)
-        self.plot_points(self.simple_zero_line, size=1)
-        self.plot_points(self.simple_sample_points, size=1, color=(0,255,0))
+        self.plot_points2(self.test_sample_points, size=1, color=(0,0,0))
+        self.plot_points2(self.test_force_points, size=1, color=(0,0,0))
+#        self.plot_points(self.simple_zero_line, size=1)
+#        self.plot_points(self.simple_sample_points, size=1, color=(0,255,0))
 #        self.plot_points(self.exMx_line_points)
 #        self.force_lines=(self.zero_line_points, self.exMx_line_points)
         self.plot_points(np.array([[0,0]]), (127,127,0),1)
         pygame.Surface.blit(self.global_screen, self.my_screen, self.pane_location)
+
+    def plot_points2(self, points, color=(0,0,255), size=1):
+        pygame.draw.polygon(self.my_screen, (0,0,0), \
+                ((0,0),\
+                 (self.my_screensize[0],self.my_screensize[1]-1),\
+                 (self.my_screensize[0],self.my_screensize[1]),\
+                 (0,1)))
+        print('-',self.my_screensize)
+        print(self.origin_coords)
+        print(self.test_sample_points)
+        print(self.test_force_points)
+        for (x,y) in [tuple(points[:,i]) for i in range(points.shape[1])]:#+self.origin_coords:
+            print(' ',points,self.origin_coords,points+self.origin_coords)
+            x = (x-self.origin_coords[0])*self.my_screensize[0]/2.1+self.origin_coords[0]
+            y = (y-self.origin_coords[1])*self.my_screensize[1]/2.1+self.origin_coords[1]
+            y=self.my_screensize[1]-y 
+            pygame.draw.polygon(self.my_screen, color, \
+                ((x-size,y-size),(x-size,y+size),(x+size,y+size),(x+size,y-size)))
+        for (x,y) in np.array([[1,1],[-1-1]]):
+            x = (x-self.origin_coords[0])*self.my_screensize[0]/2.1+self.origin_coords[0]
+            y = (y-self.origin_coords[1])*self.my_screensize[1]/2.1+self.origin_coords[1]
+            y=self.my_screensize[1]-y 
+            n=3
+            pygame.draw.polygon(self.my_screen, (255,255,255), \
+                ((x+n,y+n),(x-n,y-n),(x+n,y-n),(x-n,y+n)))
 
     def plot_points(self, points=[], color=(0,0,255), size=0):
         # tmp:
@@ -353,8 +400,8 @@ panes=[Pane(screen, pane_coords_fractions=(0,0), pane_size_fractions=(0.4,0.2)),
 panes = [Pane(screen, bg_color=(255,255,224))]
 ''' do the following in conjunction with :
 SCREENSIZE = (120*6, 120*3) # 120 is nice and divisible'''
-panes=[Pane(screen, pane_coords_fractions=(0,0), pane_size_fractions=(0.5,1)),\
-       Pane(screen, pane_coords_fractions=(0.5,0), pane_size_fractions=(0.5,1), values_width_range=[-1.5,1.5])]
+panes=[Pane(screen, pane_coords_fractions=(0,0), pane_size_fractions=(0.5,1), values_width_range=[-8,8]),\
+       Pane(screen, pane_coords_fractions=(0.5,0), pane_size_fractions=(0.5,1), values_width_range=[-1,1])]
 #panes = [Pane(screen, pane_coords_fractions=(i/3., j/3.),\
 #                       pane_size_fractions=(1/.3, 1/.3)) \
 #        for i in range(3) for j in range(3)]
@@ -413,7 +460,8 @@ while True:
     for pane in panes:
 #        pane.apply_inverse_dist_squared_force()
 #        pane.apply_unit_force()
-        pane.apply_inverse_dist_squared_force__second_try()
+#        pane.apply_inverse_dist_squared_force__second_try()
+        pane.apply_inverse_dist_squared_force__third_try()
 time.sleep(0.5)
 pygame.quit()
 #        import sys; _=input(); sys.exit()
