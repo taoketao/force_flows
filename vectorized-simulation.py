@@ -13,7 +13,7 @@ DEBUG_POINTS_ARITHMETIC = False # flag
 DEBUG_POINTS_ARITHMETIC2 = False # flag 
 DEBUG_POINTS_ARITHMETIC3 = False
 epsilon_touching = 1e2
-epsilon_touching2 = 1e-1
+epsilon_touching2 = 1e-2
 
 class Pane(object):
     def __init__(self, global_screen, **kwargs):
@@ -68,7 +68,7 @@ class Pane(object):
         self.simple_sample_points2 = np.random.uniform(\
                 int(-SCREENSIZE[0]*self.origin_fractions[0]) , \
                 int(SCREENSIZE[0]*self.origin_fractions[0]), (3,2))
-        self.simple_sample_points = np.random.uniform(-5, 5, (83,2))
+        self.simple_sample_points = np.random.uniform(0,10, (13,2))
 #        print(self.simple_sample_points[:3,:])
         self.simple_sample_points *= self.my_screensize / (self.values_width_range[1] *3)
         self.simple_sample_points -= self.origin_coords        
@@ -184,7 +184,7 @@ class Pane(object):
         magn = np.power(np.sum(np.power(cross_array,2),axis=AX_2D),0.5)
         if DEBUG_POINTS_ARITHMETIC2 or DEBUG_POINTS_ARITHMETIC3:print(magn, 'magn')
         event_horizon_mask = np.where(magn < epsilon_touching2) # if a point is too close, don't let it catapult out. 
-        print(cross_array.shape, event_horizon_mask , (event_horizon_mask[0],), 'touching mask')
+        if DEBUG_POINTS_ARITHMETIC2:print(cross_array.shape, event_horizon_mask , (event_horizon_mask[0],), 'touching mask')
         mask_=np.ones(self.simple_sample_points.shape)
         mask_[(event_horizon_mask[1],)]=0
 #        cross_array = cross_array [ event_horizon_mask ]
@@ -192,9 +192,14 @@ class Pane(object):
 #        magn_zeroed.T[(event_horizon_mask[1],)]=np.infty
 #        magn_zeroed=magn
 #        magn_zeroed[(event_horizon_mask[0],)]=np.infty
-        magn[(event_horizon_mask[0],)]=np.infty
+        '''     magn[(event_horizon_mask[0],)]=np.infty'''
 #        print(magn_zeroed,mask_,'magn_zeroed & mask')
-        print(mask_,' mask')
+#        magn = np.min(magn, 20) # instead of event horizon zeroing, try instead to cap
+        print(magn)
+        magn = np.minimum(magn, 100.0)
+        print(magn)
+        print(np.max(magn))
+        if DEBUG_POINTS_ARITHMETIC2:print(mask_,' mask')
         if DEBUG_POINTS_ARITHMETIC2:print(cross_array.shape, magn.shape, 'ca, magn shape')
         ''' Broadcasting math. A has shape (i=a,j=b,k=c) and B has shape (i=a,j=b). 
             That is, A[i=0,j=b-1,k=c/2] is an index. To get each A[:,:,k] elementwise
@@ -203,13 +208,13 @@ class Pane(object):
         '''
         unit_vectors =  np.swapaxes(np.swapaxes(cross_array, AX_SAMPLES,AX_2D) \
                       / np.swapaxes(magn,AX_SAMPLES,AX_FORCES), AX_2D,AX_SAMPLES)
-#        inv_dist_vecs = np.swapaxes(np.swapaxes(unit_vectors,0,2) / np.swapaxes(magn,0,1), 0,2)
-#        inv_dist_sqr_vecs = np.swapaxes(np.swapaxes(inv_dist_vecs ,0,2) / np.swapaxes(magn,0,1), 0,2)
+        inv_dist_vecs = np.swapaxes(np.swapaxes(unit_vectors,0,2) / np.swapaxes(magn,0,1), 0,2)
+        inv_dist_sqr_vecs = np.swapaxes(np.swapaxes(inv_dist_vecs ,0,2) / np.swapaxes(magn,0,1), 0,2)
         if DEBUG_POINTS_ARITHMETIC2:print(unit_vectors, unit_vectors.shape, 'unit vecs')
-        accum_normalized_vectors = np.sum(unit_vectors, axis=AX_FORCES)
-        if DEBUG_POINTS_ARITHMETIC3:print(accum_normalized_vectors,'accum')
+#        accum_normalized_vectors = np.sum(unit_vectors, axis=AX_FORCES)
 #        accum_normalized_vectors = np.sum(inv_dist_vecs, axis=1)
-#        accum_normalized_vectors = np.sum(inv_dist_sqr_vecs , axis=1)
+        accum_normalized_vectors = np.sum(inv_dist_sqr_vecs , axis=1)
+        if DEBUG_POINTS_ARITHMETIC3:print(accum_normalized_vectors,'accum')
 #        if DEBUG_POINTS_ARITHMETIC2:_=input()
 #        accum_normalized_vectors.T[(event_horizon_mask[1],)] = 0
         self.simple_sample_points += accum_normalized_vectors *0.1
@@ -401,7 +406,7 @@ while True:
 #        pane.plot_points()
     pygame.display.flip()
     pygame.display.set_caption("fps cap: " + str(1./fps))
-    print('-')
+    if fps>0.001:print('-')
 #    if any([e.type == pygame.KEYDOWN and pygame.K_SPACE == e.key \
 #                for e in pygame.event.get()]):
 #        event = pygame.event.wait()
