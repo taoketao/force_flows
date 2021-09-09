@@ -15,12 +15,11 @@ import random
 import pygame
 import time
 
-SCREENSIZE = (120*6, 120*3) # 120 is nice and divisible
-DEBUG_POINTS_ARITHMETIC = False # flag 
-DEBUG_POINTS_ARITHMETIC2 = False # flag 
-DEBUG_POINTS_ARITHMETIC3 = False
+def exit(): import sys; _=input('exiting.'); sys.exit()
+
+SCREENSIZE = (120*9, 120*3) # 120 is nice and divisible
 epsilon_touching = 1e2
-epsilon_touching2 = 1e-2
+
 
 class Pane(object):
     def __init__(self, global_screen, **kwargs):
@@ -39,19 +38,28 @@ class Pane(object):
         # OR origin, zoom, relative_scale_y_fraction (which gets internally converted)
         # and an independent range of values that locate the force and sample points.
         self.default_origin_fractions = (.5,.3) # (.5,.5) would be at the center of pane
-        self.origin_fractions = kwargs.get('origin_fractions', self.default_origin_fractions) # (.5,.2)
-        self.origin_coords = np.array([int(self.my_screensize[i] * \
-                self.origin_fractions[i]) for i in [0,1]])
 
         # Left, Right, Bottom, and Top bounds for plotting. Default: [-1, 1, 1.4, 0.6]
-        default_LRBT_bounds = [-2*self.origin_fractions[0], 2*(1-self.origin_fractions[0]),\
-                               -2*self.origin_fractions[1], 2*(1-self.origin_fractions[1])]
         if 'LRBT_bounds' in kwargs.keys():
+            if 'origin_fractions' in kwargs:
+                raise Exception("don't provide both origin center fractions and LRBT bounds")
             self.LRBT_bounds = kwargs['LRBT_bounds']
-        elif 'zoom' in kwargs.keys():
-            self.LRBT_bounds = [bound*kwargs['zoom'] for bound in default_LRBT_bounds]
+            self.origin_fractions = (abs(self.LRBT_bounds[0]/(self.LRBT_bounds[1]-self.LRBT_bounds[0])),\
+                                     abs(self.LRBT_bounds[2]/(self.LRBT_bounds[2]-self.LRBT_bounds[3])))
+            print(self.origin_fractions, (self.LRBT_bounds[0]/(self.LRBT_bounds[1]-self.LRBT_bounds[0])\
+                    , self.LRBT_bounds[2]/(self.LRBT_bounds[2]-self.LRBT_bounds[3])))
+            _=input()
         else:
-            self.LRBT_bounds = default_LRBT_bounds 
+            self.origin_fractions = kwargs.get('origin_fractions', self.default_origin_fractions) # (.5,.3)
+            default_LRBT_bounds = [-2*self.origin_fractions[0], 2*(1-self.origin_fractions[0]),\
+                                   -2*self.origin_fractions[1], 2*(1-self.origin_fractions[1])]
+            if 'zoom' in kwargs.keys():
+                self.LRBT_bounds = [bound*kwargs['zoom'] for bound in default_LRBT_bounds]
+            else:
+                self.LRBT_bounds = default_LRBT_bounds 
+
+        self.origin_coords = np.array([int(self.my_screensize[i] * \
+                self.origin_fractions[i]) for i in [0,1]])
 
         ''' Values_width_range: the range of values to calculate functions. 
             Matters most for, eg, e^x-x. '''
@@ -212,33 +220,12 @@ class Pane(object):
 #                -np.expand_dims(self.simple_sample_points, 1)\
 #                )#.shape )
         # ^ check!
-        if DEBUG_POINTS_ARITHMETIC2:
-            print('simple_sample_points','simple_zero_line', 'cross_array', 'magn', \
-                    'shapes', 'unit vecs')
-            print( self.simple_sample_points.T, 'samps')
-            print( -self.simple_zero_line.T, '0\'s')
-            print( cross_array, 'ca')
         axes_names = AX_SAMPLES, AX_FORCES, AX_2D = 0,1,2
         magn = np.power(np.sum(np.power(cross_array,2),axis=AX_2D),0.5)
-        if DEBUG_POINTS_ARITHMETIC2 or DEBUG_POINTS_ARITHMETIC3:print(magn, 'magn')
-        event_horizon_mask = np.where(magn < epsilon_touching2) # if a point is too close, don't let it catapult out. 
-        if DEBUG_POINTS_ARITHMETIC2:print(cross_array.shape, event_horizon_mask , (event_horizon_mask[0],), 'touching mask')
+        event_horizon_mask = np.where(magn < epsilon_touching) # if a point is too close, don't let it catapult out. 
         mask_=np.ones(self.simple_sample_points.shape)
         mask_[(event_horizon_mask[1],)]=0
-#        cross_array = cross_array [ event_horizon_mask ]
-#        print (cross_array[(event_horizon_mask[0],)])
-#        magn_zeroed.T[(event_horizon_mask[1],)]=np.infty
-#        magn_zeroed=magn
-#        magn_zeroed[(event_horizon_mask[0],)]=np.infty
-        '''     magn[(event_horizon_mask[0],)]=np.infty'''
-#        print(magn_zeroed,mask_,'magn_zeroed & mask')
-#        magn = np.min(magn, 20) # instead of event horizon zeroing, try instead to cap
-        print(magn)
         magn = np.minimum(magn, 100.0)
-        print(magn)
-        print(np.max(magn))
-        if DEBUG_POINTS_ARITHMETIC2:print(mask_,' mask')
-        if DEBUG_POINTS_ARITHMETIC2:print(cross_array.shape, magn.shape, 'ca, magn shape')
         ''' Broadcasting math. A has shape (i=a,j=b,k=c) and B has shape (i=a,j=b). 
             That is, A[i=0,j=b-1,k=c/2] is an index. To get each A[:,:,k] elementwise
             divided by B[:,:], that is C_ijk = [A_ij/B_ij]{1...c}, do:
@@ -248,35 +235,10 @@ class Pane(object):
                       / np.swapaxes(magn,AX_SAMPLES,AX_FORCES), AX_2D,AX_SAMPLES)
         inv_dist_vecs = np.swapaxes(np.swapaxes(unit_vectors,0,2) / np.swapaxes(magn,0,1), 0,2)
         inv_dist_sqr_vecs = np.swapaxes(np.swapaxes(inv_dist_vecs ,0,2) / np.swapaxes(magn,0,1), 0,2)
-        if DEBUG_POINTS_ARITHMETIC2:print(unit_vectors, unit_vectors.shape, 'unit vecs')
-#        accum_normalized_vectors = np.sum(unit_vectors, axis=AX_FORCES)
-#        accum_normalized_vectors = np.sum(inv_dist_vecs, axis=1)
         accum_normalized_vectors = np.sum(inv_dist_sqr_vecs , axis=1)
-        if DEBUG_POINTS_ARITHMETIC3:print(accum_normalized_vectors,'accum')
-#        if DEBUG_POINTS_ARITHMETIC2:_=input()
-#        accum_normalized_vectors.T[(event_horizon_mask[1],)] = 0
         self.simple_sample_points += accum_normalized_vectors *0.1
         self.simple_sample_points *= self.my_screensize / self.values_width_range[1] / 3
         return
-
-
-
-        # ^ this vectorizes: for each sample point, calculate the vector to each force attractive point.
-        magn = np.power(np.sum(np.power(cross_array,2),axis=0),0.5)
-        print (magn)
-        if np.power(np.sum(np.power(magn,2)),0.5)<epsilon_touching: return
-        avg_magn = np.mean(magn, axis=1)
-        magn = (magn.T/np.max(magn,axis=1)).T
-        print (magn)
-        print(magn.shape, avg_magn.shape, avg_magn)
-        inv_dist_sqrs = cross_array / magn
-        print(inv_dist_sqrs[:3,:3,:3] )
-        inv_dist_sqrs *= magn
-#        print(inv_dist_sqrs[:3,:3,:3] )
-        accums=np.sum(inv_dist_sqrs , axis=0)
-        print(accums[:3,:3])
-        print('---')
-        self.sample_points_exMx = self.sample_points_exMx + accums.T.astype(np.float64)*0.01
 
 
 
@@ -287,34 +249,22 @@ class Pane(object):
                 self.zero_line_points.shape+(1,)) \
                 )#.shape )
         magn = np.power(np.sum(np.power(cross_array,2),axis=0),0.5)
-        print (magn)
         if np.power(np.sum(np.power(magn,2)),0.5)<epsilon_touching: return
         avg_magn = np.mean(magn, axis=1)
         magn = (magn.T/np.max(magn,axis=1)).T
-        print (magn)
-        print(magn.shape, avg_magn.shape, avg_magn)
         inv_dist_sqrs = cross_array / magn
-        print(inv_dist_sqrs[:3,:3,:3] )
-#        inv_dist_sqrs /= magn
-#        print(inv_dist_sqrs[:3,:3,:3] )
         accums=np.sum(inv_dist_sqrs , axis=0)
-        print(accums[:3,:3])
-        print('---')
         self.sample_points_exMx = self.sample_points_exMx - accums.T.astype(np.float64)*0.001
 
     def apply_unit_force(self): # subgradient-style: add all distanced-strengthed vectors then normalize
         self.sample_points_exMx 
-        print(self.sample_points_exMx.shape, self.zero_line_points.shape )
         cross_array=\
                np.add(self.sample_points_exMx.T, \
                 np.reshape(self.zero_line_points.T,\
                 self.zero_line_points.shape+(1,)) \
                 )#.shape )
         accums=np.sum(cross_array, axis=0)
-        print (accums)
         normz_accums = accums / np.power(np.sum(np.power(accums,2),axis=0),0.5)
-        print (normz_accums)
-#        self.sample_points_exMx = self.sample_points_exMx - accums.T.astype(np.float64)*0.001
         self.sample_points_exMx = self.sample_points_exMx - normz_accums.T.astype(np.float64)*20
 
     ''' ------------------------------------------------------------  '''
@@ -327,29 +277,17 @@ class Pane(object):
         if not self.color_bit:
             self.color_bit=True
             self.bg_color = self.get_random_bg_color() 
-#        self.plot_points(self.sample_points_exMx, color=(255,0,0), size=0.5)
-#        self.plot_points(self.id_line_points,     color=(0,0,0), size=.5)
-#        self.plot_points(self.exp_line_points,    color=(0,0,0), size=.5)
-#        self.plot_points(self.zero_line_points, size=2)
-        self.plot_points2(self.test_sample_points, size=1, color=(0,0,0))
-        self.plot_points2(self.test_force_points, size=1, color=(0,0,0))
-#        self.plot_points(self.simple_zero_line, size=1)
-#        self.plot_points(self.simple_sample_points, size=1, color=(0,255,0))
-#        self.plot_points(self.exMx_line_points)
-#        self.force_lines=(self.zero_line_points, self.exMx_line_points)
-        self.plot_points(np.array([[0,0]]), (127,127,0),1)
+        self.plot_points_current(self.test_sample_points, size=1, color=(0,0,0))
+        self.plot_points_current(self.test_force_points, size=1, color=(0,0,0))
+        self.plot_points_old(np.array([[0,0]]), (127,127,0),1)
         pygame.Surface.blit(self.global_screen, self.my_screen, self.pane_location)
 
-    def plot_points2(self, points, color=(0,0,255), size=1):
+    def plot_points_current(self, points, color=(0,0,255), size=1):
         pygame.draw.polygon(self.my_screen, (0,0,0), \
                 ((0,0),\
                  (self.my_screensize[0],self.my_screensize[1]-1),\
                  (self.my_screensize[0],self.my_screensize[1]),\
                  (0,1)))
-#        print('-',self.my_screensize)
-#        print(self.origin_coords)
-#        print(self.test_sample_points)
-#        print(self.test_force_points)
         bds=self.LRBT_bounds[:]
         bds[0]*=self.my_screensize[0]
         bds[1]*=self.my_screensize[0]
@@ -363,61 +301,79 @@ class Pane(object):
                 (ops[0],bds[2]),\
                 (ops[0],bds[3]) )
 
-        print(points.shape)
-
         # tag [62362]
+
+        screen_width  = self.LRBT_bounds[1] - self.LRBT_bounds[0]
+        screen_height = self.LRBT_bounds[3] - self.LRBT_bounds[2]
+        scale_x = self.my_screensize[0]/screen_width  
+        scale_y = self.my_screensize[1]/screen_height   
+
+        print('    bounds:', self.LRBT_bounds[:],'->',bds)
+        print('    origin coords:', self.origin_coords)
+
+        pygame.font.init() 
+        myfont = pygame.font.SysFont('Comic Sans MS', 10)
+
+        origin_coords_2=np.array([0,self.my_screensize[1]])-self.origin_coords*np.array([-1,1])
+        print('    origin coords2:', origin_coords_2)
+        print('    screen size:', self.my_screensize)
+        pygame.draw.circle(self.my_screen, (127,255,127), \
+                origin_coords_2,4)
+        textsurface = myfont.render('0,0', False, (0, 255, 0))
+        self.my_screen.blit(textsurface, origin_coords_2)
+
+        ''' plot a point every 100 pixels: '''
+        range_ = [100*z for z in range(self.my_screensize[0]//100+1)]
+        for x in range_:
+            for y in range_:
+                pygame.draw.circle(self.my_screen, (255,192,0),(x,y),2)
+
+        '''
+self.LRBT_bounds =  [-1, 1, -0.6, 1.4] < > v ^
+width, height = 2,2
+screensize=360x360
+origin_coords_2 = 180,252  <- add these at the very end
+[0.9,0.9] -> 162,162  ==  (360/2)*.9 == screensize / width * value
+          -> 324,90 == (origin_coords_x + points_x, origin_coords_y - points_y)
+
+        '''
+
+        for i, (x0,y0) in enumerate(np.array([[.9,.9],[-.9,-.4],[.1,.9]])):
+            print(x0,y0,'->',end=' ')
+            x = origin_coords_2[0]+x0*scale_x
+            y = origin_coords_2[1]-y0*scale_y
+            print(x,y)
+            n=10
+            pygame.draw.polygon(self.my_screen, (255,255,255), \
+                ((x+n,y+n),(x-n,y-n),(x+n,y-n),(x-n,y+n)))
+            textsurface = myfont.render(str((x0,y0)), False, (0, 255, 0))
+            self.my_screen.blit(textsurface, (x,y))
+        return
         for (x,y) in points:#+self.origin_coords:
-            print('points',points)
-            print('origin coords',self.origin_coords)
-            print('added',points+self.origin_coords)
-            print('bounds', self.LRBT_bounds, bds)
-            print('my_screensize', self.my_screensize)
-            x = (x-self.origin_coords[0])*self.my_screensize[0]/2.1+self.origin_coords[0]
-            y = (y-self.origin_coords[1])*self.my_screensize[1]/2.1+self.origin_coords[1]
-            y=self.my_screensize[1]-y 
+            print(x,y,'->',end=' ')
+            # incomplete
+            x = (x * self.my_screensize[0]) - self.origin_coords[0]
+            y = (y * self.my_screensize[1]) - self.origin_coords[1]
+            print(x,y)
             pygame.draw.polygon(self.my_screen, (255,127,0), \
                 ((x-size,y-size),(x-size,y+size),(x+size,y+size),(x+size,y-size)))
-        return
+
 
         for (x,y) in [tuple(points[:,i]) for i in range(points.shape[1])]:#+self.origin_coords:
-            print(' ',points,self.origin_coords,points+self.origin_coords)
             x = (x-self.origin_coords[0])*self.my_screensize[0]/2.1+self.origin_coords[0]
             y = (y-self.origin_coords[1])*self.my_screensize[1]/2.1+self.origin_coords[1]
             y=self.my_screensize[1]-y 
             pygame.draw.polygon(self.my_screen, color, \
                 ((x-size,y-size),(x-size,y+size),(x+size,y+size),(x+size,y-size)))
-        for (x,y) in np.array([[1,1],[-1-1]]):
-            x = (x-self.origin_coords[0])*self.my_screensize[0]/2.1+self.origin_coords[0]
-            y = (y-self.origin_coords[1])*self.my_screensize[1]/2.1+self.origin_coords[1]
-            y=self.my_screensize[1]-y 
-            n=3
-            pygame.draw.polygon(self.my_screen, (255,255,255), \
-                ((x+n,y+n),(x-n,y-n),(x+n,y-n),(x-n,y+n)))
 
-    def plot_points(self, points=[], color=(0,0,255), size=0):
-        # tmp:
+    def plot_points_old(self, points=[], color=(0,0,255), size=0):
         if len(points)==0:
             points = np.array([ [2,-3], [5,4] ])
             points = np.array([ [-6,-6], [2,-3], [5,4] ])
             points = np.array([ [0,0], [0,4], [3,4] ])
             points = np.array([ [-2,-4], [2,4], [-2,4] ])
-        if DEBUG_POINTS_ARITHMETIC: 
-            # NOTICE: values_width_range used to be [[-5,-5],[5,5]], not [-5,5]. watch for bugs.
-            print( points, self.values_width_range ) 
-            print( [(self.values_width_range[i]-points).flatten() for i in [0,1]]) 
-            print( [(points-self.values_width_range[i]).flatten() for i in [0,1]])
-        if False and not ((np.all(self.values_width_range[1]-points >= 0) and\
-                np.all(points-self.values_width_range[0] >= 0))):
-            raise Exception("points can't be out of window bounds/not implemented")
-            pass#  todo: instead, just don't *plot* these points, but \
-            pass#  include them in calculations with caveat message
-        if DEBUG_POINTS_ARITHMETIC: 
-            print(points + self.origin_coords)
-            print(self.origin_coords)
-        
         for (x,y) in points+self.origin_coords:
             y=self.my_screensize[1]-y 
-            if DEBUG_POINTS_ARITHMETIC: print( x,y)
             pygame.draw.polygon(self.my_screen, color, \
                 ((x-size,y-size),(x-size,y+size),(x+size,y+size),(x+size,y-size)))
 #                    ((x-1,y-1),(x-1,y+1),(x+1,y+1),(x+1,y-1)))
@@ -439,42 +395,19 @@ pygame.init()
 screen = pygame.display.set_mode(SCREENSIZE)
 ORIGIN = tuple([int(s/2) for s in SCREENSIZE])
 
-# panes definitions
-panes=[Pane(screen, pane_coords_fractions=(0,0), pane_size_fractions=(0.4,0.2)),\
-       Pane(screen, pane_coords_fractions=(0.4,0), pane_size_fractions=(0.6,0.2)),\
-       Pane(screen, pane_coords_fractions=(0,0.2), pane_size_fractions=(0.4,0.8)),\
-       Pane(screen, pane_coords_fractions=(0.4,0.2),pane_size_fractions=(0.6,0.8))]
+# pane instantiations
 panes = [Pane(screen, bg_color=(255,255,224))]
 ''' do the following in conjunction with :
 SCREENSIZE = (120*6, 120*3) # 120 is nice and divisible'''
-panes=[Pane(screen, pane_coords_fractions=(0,0), pane_size_fractions=(0.5,1), values_width_range=[-8,8]),\
-       Pane(screen, pane_coords_fractions=(0.5,0), pane_size_fractions=(0.5,1), values_width_range=[-1,1])]
-panes=[Pane(screen, pane_coords_fractions=(0,0), pane_size_fractions=(0.5,1), values_width_range=[-8,8], LRTB_bounds=[-9,9,-9,9]),\
-       Pane(screen, pane_coords_fractions=(0.5,0), pane_size_fractions=(0.5,1), values_width_range=[-1,1], LRTB_bounds=[-1,1,-1,1])]
-#panes = [Pane(screen, pane_coords_fractions=(i/3., j/3.),\
-#                       pane_size_fractions=(1/.3, 1/.3)) \
-#        for i in range(3) for j in range(3)]
-#panes =\
-#    [Pane(screen, pane_coords_fractions=( 0,.0),pane_size_fractions=(.3, .3)),\
-#     Pane(screen, pane_coords_fractions=(.3,.0),pane_size_fractions=(.3, .3)),\
-#     Pane(screen, pane_coords_fractions=(.6,.0),pane_size_fractions=(.4, .3)),\
-#     Pane(screen, pane_coords_fractions=( 0,.3),pane_size_fractions=(.3, .3)),\
-#     Pane(screen, pane_coords_fractions=(.3,.3),pane_size_fractions=(.3, .3)),\
-#     Pane(screen, pane_coords_fractions=(.6,.3),pane_size_fractions=(.4, .3)),\
-#     Pane(screen, pane_coords_fractions=( 0,.6),pane_size_fractions=(.3, .4)),\
-#     Pane(screen, pane_coords_fractions=(.3,.6),pane_size_fractions=(.3, .4)),\
-#     Pane(screen, pane_coords_fractions=(.6,.6),pane_size_fractions=(.4, .4))]
-
-#while not any([pygame.KEYDOWN == e.type for e in pygame.event.get()]):
+panes=[Pane(screen, pane_coords_fractions=(0,0), pane_size_fractions=(1/3.,1), values_width_range=[-8,8], LRBT_bounds=[-4,4,-4,4]),\
+       Pane(screen, pane_coords_fractions=(1/3.,0), pane_size_fractions=(1/3.,1), values_width_range=[-8,8], LRBT_bounds=[-4,7,-2,2]),\
+       Pane(screen, pane_coords_fractions=(2/3.,0), pane_size_fractions=(1/3.,1), values_width_range=[-1,1], LRBT_bounds=[-1,1,-0.6,1.4])]
 exit_bit=False
 Events=[]
-#while not any([pygame.KEYDOWN == e.type for e in Events]):
-#while not any([pygame.KEYDOWN == e.type and not pygame.K_SPACE == e.key for e in Events]):
 fps=1
+
 while True:
     Events = pygame.event.get()
-#    if any([pygame.KEYDOWN == e.type and pygame.K_SPACE == e.key for e in Events]):
-#        break
     for e in Events:
         if e.type == pygame.KEYDOWN:
             if e.key==pygame.K_SPACE: 
@@ -484,8 +417,6 @@ while True:
                 e2=pygame.event.wait()
                 pygame.display.set_caption("RESUMING fps cap: " + str(1./fps))
                 continue
-#                if e2.type == pygame.KEYDOWN and e2.key == pygame.K_SPACE:
-#                    continue
             if e.key == pygame.K_UP:
                 fps *= 0.5
             elif e.key == pygame.K_DOWN:
@@ -494,24 +425,19 @@ while True:
         if e.type == pygame.QUIT:
             exit_bit=True
     if exit_bit: break
+
     time.sleep(fps)
     screen.fill(pygame.Color(150,200,200))
-#    pygame.draw.circle(screen, pygame.Color("yellow"), ORIGIN, 10)
     for pane in panes:
         pane.draw_me()
-#        pane.plot_points()
     pygame.display.flip()
     pygame.display.set_caption("fps cap: " + str(1./fps))
     if fps>0.001:print('-')
-#    if any([e.type == pygame.KEYDOWN and pygame.K_SPACE == e.key \
-#                for e in pygame.event.get()]):
-#        event = pygame.event.wait()
     for pane in panes:
-#        pane.apply_inverse_dist_squared_force()
-#        pane.apply_unit_force()
-#        pane.apply_inverse_dist_squared_force__second_try()
         pane.apply_inverse_dist_squared_force__third_try()
+    
     if input():break
+
 time.sleep(0.5)
 pygame.quit()
 #        import sys; _=input(); sys.exit()
